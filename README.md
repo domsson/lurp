@@ -51,12 +51,16 @@ The following command line options are available:
 
 - `-c CHANNEL`: specify the channel to join; should start with `#` 
                 and be all lower-case
-- `-t FORMAT`: specify a timestamp format; if `-t` isn't given, 
-               no timestamp will be printed
-- `-p`: use padding to align all user names and messages neatly
 - `-b`: prefix usernames with `@` and/or `+` 
         for moderators and subscribers respectively
+- `-d`: use display names instead of user names where available
+- `-h`: print help text and exit
 - `-m MODE`: manually specify the color mode, see below.
+- `-p`: use padding to align all user names and messages neatly
+- `-s`: print additional status information
+- `-t FORMAT`: specify a timestamp format; if `-t` isn't given, 
+               no timestamp will be printed
+- `-v`: print version information and exit
 
 ## Color modes
 

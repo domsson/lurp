@@ -49,12 +49,13 @@ static volatile int handled; // The last signal that has been handled
 
 struct metadata
 {
-	char *chan;           // Channel to join
-	char *timestamp;      // Timestamp format
-	int   colormode;      // Color mode
-	int   padding : 1;    // Pad nicknames to align them
-	int   badges : 1;     // Print sub/mod 'badges'
-	int   verbose : 1;    // Print additional info
+	char *chan;              // Channel to join
+	char *timestamp;         // Timestamp format
+	int   colormode;         // Color mode
+	int   padding : 1;       // Pad nicknames to align them
+	int   badges : 1;        // Print sub/mod 'badges'
+	int   verbose : 1;       // Print additional info
+	int   displaynames : 1;  // Favor display over user names
 };
 
 /*
@@ -349,11 +350,12 @@ void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
 
 	twirc_tag_t *color_tag  = twirc_get_tag_by_key(evt->tags, "color");
 	twirc_tag_t *badges_tag = twirc_get_tag_by_key(evt->tags, "badges");
+	twirc_tag_t *dname_tag  = twirc_get_tag_by_key(evt->tags, "display-name");
 
 	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
 
 	char nick[TWIRC_NICK_SIZE];
-	sprintf(nick, "%c%s", status, evt->origin);
+	sprintf(nick, "%c%s", status, meta->displaynames && dname_tag && dname_tag->value ? dname_tag->value : evt->origin);
 
 	char timestamp[TIMESTAMP_BUFFER];
 	timestamp_prefix(s, timestamp, TIMESTAMP_BUFFER);
@@ -402,11 +404,12 @@ void handle_action(twirc_state_t *s, twirc_event_t *evt)
 
 	twirc_tag_t *color_tag  = twirc_get_tag_by_key(evt->tags, "color");
 	twirc_tag_t *badges_tag = twirc_get_tag_by_key(evt->tags, "badges");
+	twirc_tag_t *dname_tag  = twirc_get_tag_by_key(evt->tags, "display-name");
 
 	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
 
 	char nick[TWIRC_NICK_SIZE];
-	sprintf(nick, "%c%s", status, evt->origin);
+	sprintf(nick, "%c%s", status, meta->displaynames && dname_tag && dname_tag->value ? dname_tag->value : evt->origin);
 
 	char timestamp[TIMESTAMP_BUFFER];
 	timestamp_prefix(s, timestamp, TIMESTAMP_BUFFER);
@@ -474,6 +477,7 @@ void help(char *invocation)
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Options:\n");
 	fprintf(stdout, "\t-b Mark subscribers and mods with + and @ respectively.\n");
+	fprintf(stdout, "\t-d Use display names instead of user names where available.\n");
 	fprintf(stdout, "\t-h Print this help text and exit.\n");
 	fprintf(stdout, "\t-m MODE Set the color mode: 'true', '8bit', '4bit', '2bit' or 'none'.\n");
 	fprintf(stdout, "\t-p Left-pad usernames to align them.\n");
@@ -597,7 +601,7 @@ int main(int argc, char **argv)
 	// Process command line options
 	opterr = 0;
 	int o;
-	while ((o = getopt(argc, argv, "c:t:m:bpsvh")) != -1)
+	while ((o = getopt(argc, argv, "c:t:m:bdpsvh")) != -1)
 	{
 		switch(o)
 		{
@@ -606,6 +610,9 @@ int main(int argc, char **argv)
 				break;
 			case 'b':
 				m.badges = 1;
+				break;
+			case 'd':
+				m.displaynames = 1;
 				break;
 			case 'm':
 				m.colormode = color_mode(optarg, m.colormode);
