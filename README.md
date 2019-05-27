@@ -5,7 +5,9 @@ and outputs all chat messages to `stdout`.
 
 Currently Linux only.
 
-<img src="https://raw.githubusercontent.com/domsson/lurp/master/example.png" style="margin:0 calc((100% - 685px) / 2); box-shadow: 0 2px 1rem #555" alt="lurp example">
+<p align="center">
+   <img src="https://raw.githubusercontent.com/domsson/lurp/master/example.png" alt="lurp example">
+</p>
 
 ## Dependencies
 
