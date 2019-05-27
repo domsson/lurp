@@ -3,6 +3,8 @@
 `lurp` anonymously connects to a Twitch channel of your choice 
 and outputs all chat messages to `stdout`.
 
+Currently Linux only.
+
 ## Dependencies
 
 - [`libtwirc`](https://github.com/domsson/libtwirc)
