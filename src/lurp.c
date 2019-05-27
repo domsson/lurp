@@ -15,6 +15,7 @@
 #define VERSION_MINOR 1
 #define VERSION_BUILD 0
 
+#define PROJECT_NAME "lurp"
 #define PROJECT_URL "https://github.com/domsson/lurp"
 
 #define DEFAULT_HOST "irc.chat.twitch.tv"
@@ -462,7 +463,8 @@ void sigint_handler(int sig)
 
 void version()
 {
-	fprintf(stdout, "twitch-dump version %d.%d.%d - %s\n",
+	fprintf(stdout, "%s version %d.%d.%d - %s\n",
+				PROJECT_NAME,
 				VERSION_MAJOR,
 				VERSION_MINOR,
 				VERSION_BUILD,
@@ -472,8 +474,8 @@ void version()
 void help(char *invocation)
 {
 	fprintf(stdout, "Usage:\n");
-	fprintf(stdout, "\t%s [OPTION...] -c CHANNEL\n", invocation);
-	fprintf(stdout, "\t Note: the channel should start with '#'\n");
+	fprintf(stdout, "\t%s -c CHANNEL [OPTIONS...]\n", invocation);
+	fprintf(stdout, "\tNote: the channel should start with '#' and be all lower-case.\n");
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Options:\n");
 	fprintf(stdout, "\t-b Mark subscribers and mods with + and @ respectively.\n");
@@ -482,7 +484,7 @@ void help(char *invocation)
 	fprintf(stdout, "\t-m MODE Set the color mode: 'true', '8bit', '4bit', '2bit' or 'none'.\n");
 	fprintf(stdout, "\t-p Left-pad usernames to align them.\n");
 	fprintf(stdout, "\t-s Print additional status information to stderr.\n");
-	fprintf(stdout, "\t-t FORMAT Enable timestamps, optionally specifying the format.\n");
+	fprintf(stdout, "\t-t FORMAT Enable timestamps, using the specified format.\n");
 	fprintf(stdout, "\t-v Print version information and exit.\n");
 	fprintf(stdout, "\n");
 	version();
@@ -638,7 +640,7 @@ int main(int argc, char **argv)
 	// Abort if no channel name was given	
 	if (m.chan == NULL)
 	{
-		fprintf(stderr, "No channel specified, exiting\n");
+		help(argv[0]);
 		return EXIT_FAILURE;
 	}
 
