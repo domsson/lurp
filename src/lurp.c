@@ -15,12 +15,12 @@
 #define VERSION_MINOR 1
 #define VERSION_BUILD 0
 
-#define PROJECT_URL "https://github.com/domsson/twircclient"
+#define PROJECT_URL "https://github.com/domsson/lurp"
 
 #define DEFAULT_HOST "irc.chat.twitch.tv"
 #define DEFAULT_PORT "6667"
 #define DEFAULT_TIMESTAMP "[%H:%M:%S]"
-#define TIMESTAMP_BUFFER 64
+#define TIMESTAMP_BUFFER 16 
 
 
 // https://en.wikipedia.org/wiki/ANSI_escape_code
@@ -132,21 +132,10 @@ char *timestamp_prefix(twirc_state_t *s, char *buf, size_t len)
 }
 
 // TODO This needs to be improved, some matches are shit
-// Slightly changed version of this snippet:
+// It is a slightly changed version of this snippet:
 // https://stackoverflow.com/questions/1988833/converting-color-to-consolecolor/29192463#29192463
 int rgb_to_4bit(const struct rgb_color *rgb)
 {	
-	/*
-	unsigned int r, g, b;
-	sscanf(rgb[0]=='#' ? rgb+1 : rgb, "%02x%02x%02x", &r, &g, &b);
-
-	unsigned char ansi = 0;
-	ansi |= (r > 64 && (g < 196 && b < 196)) ? 1 : 0; // Red bit
-	ansi |= (g > 64 && (r < 196 && b < 196)) ? 2 : 0; // Green bit
-	ansi |= (b > 64 && (r < 196 && g < 196)) ? 4 : 0; // Blue bit
-	ansi += (r > 128 || g > 128 || b > 128) ? 90 : 30; // Bright bit
-	*/
-
 	unsigned char ansi = 0;
 	ansi |= (rgb->r > 64 && (rgb->g < 196 && rgb->b < 196)) ? 1 : 0;  // Red bit
 	ansi |= (rgb->g > 64 && (rgb->r < 196 && rgb->b < 196)) ? 2 : 0;  // Green bit
@@ -157,25 +146,15 @@ int rgb_to_4bit(const struct rgb_color *rgb)
 }
 
 // TODO this also doesn't seem to yield accurate results
+// https://gist.github.com/MicahElliott/719710
 int rgb_to_8bit(const struct rgb_color *rgb)
 {
-	// https://gist.github.com/MicahElliott/719710
-
-	/*	
-	unsigned int r, g, b;
-	sscanf(rgb[0]=='#' ? rgb+1 : rgb, "%02x%02x%02x", &r, &g, &b);
-
-	// For a single direction conversion that ignores the grayscale strip 
-	// and base 16 colours (obviously not optimal, but you can do those 
-	// two in fast initial passes), you can use a simple colorcube 
-	// transform given RGB in the range [0, 1]:
-	return (r/255.0 * 36) + (g/255.0 * 6) + (b/255.0) + 16;
-	*/
-
 	return (rgb->r/255.0 * 36) + (rgb->g/255.0 * 6) + (rgb->b/255.0) + 16;
 }
 
-
+/*
+ * Convert a hex color string ("#RRGGBB") to a rgb_color struct.
+ */
 struct rgb_color hex_to_rgb(const char *hex)
 {
 	struct rgb_color rgb = { 0 };
@@ -183,6 +162,9 @@ struct rgb_color hex_to_rgb(const char *hex)
 	return rgb;
 }
 
+/*
+ * Returns a rgb_color struct initialized to a random color.
+ */
 struct rgb_color random_color()
 {
 	struct rgb_color rgb = { 0 };
@@ -311,6 +293,51 @@ char *color_suffix(int colormode, const struct rgb_color *rgb, char *buf, size_t
 }
 
 /*
+ * Given the "badges" tag, determines if the origin has moderator permissions.
+ * This means the origin (the user who caused the event) is either a moderator
+ * or the broadcaster of the channel the event occurred in.
+ * Returns 1 for mods, 0 for non-mods, -1 on error.
+ */
+int is_mod(twirc_tag_t *badges)
+{
+	if (badges == NULL || badges->value == NULL)
+	{
+		return -1;
+	}
+
+	if (strstr(badges->value, "moderator/"))
+	{
+		return 1;
+	}
+
+	if (strstr(badges->value, "broadcaster/"))
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
+ * Given the "badges" tag, determines if the origin is a subscriber.
+ * Returns 1 for subs, 0 for non-subs, -1 on error.
+ */
+int is_sub(twirc_tag_t *badges)
+{
+	if (badges == NULL || badges->value == NULL)
+	{
+		return -1;
+	}
+
+	if (strstr(badges->value, "subscriber/"))
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
  * Called when a user sends a message to a channel. In other words, chat!
  * 'evt->origin' will contain the username of the person who sent the message,
  * 'evt->channel' will contain the channel the message was sent to,
@@ -323,37 +350,13 @@ void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
 	twirc_tag_t *color_tag  = twirc_get_tag_by_key(evt->tags, "color");
 	twirc_tag_t *badges_tag = twirc_get_tag_by_key(evt->tags, "badges");
 
-	int is_sub = 0;
-	int is_mod = 0;
-
-	if (badges_tag && badges_tag->value)
-	{
-		if (strstr(badges_tag->value, "subscriber/"))
-		{
-			is_sub = 1;
-		}
-		if (strstr(badges_tag->value, "moderator/"))
-		{
-			is_mod = 1;
-		}
-		if (strstr(badges_tag->value, "broadcaster/"))
-		{
-			is_mod = 1;
-		}
-	}
-
-	char status = is_mod ? '@' : (is_sub ? '+' : ' ');
+	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
 
 	char nick[TWIRC_NICK_SIZE];
 	sprintf(nick, "%c%s", status, evt->origin);
 
 	char timestamp[TIMESTAMP_BUFFER];
 	timestamp_prefix(s, timestamp, TIMESTAMP_BUFFER);
-
-	int prelen = strlen(timestamp) + (meta->padding ? 26 : strlen(nick)) + 2;
-	int cols = tigetnum("cols");
-	int width = cols - prelen;
-	int msglen = strlen(evt->message);
 
 	struct rgb_color white = { 255, 255, 255 };
 	struct rgb_color rgb = color_tag && color_tag->value ? hex_to_rgb(color_tag->value) : white; 
@@ -363,33 +366,29 @@ void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
 	char col_suffix[8];
 	color_suffix(meta->colormode, &rgb, col_suffix, 8);
 
+	int prefix_len = strlen(timestamp) + (meta->padding ? 26 : strlen(nick)) + 2;
+	int width = tigetnum("cols") - prefix_len;
+	int msg_len = strlen(evt->message);
+
 	fprintf(stdout, "%s%s%*s%s: %.*s\n",
 				timestamp,
 				col_prefix,
 				meta->padding * -26, // 25 = max nick length on Twitch, +1 for 'badge' 
 				nick,
 				col_suffix,
-				msglen > width ? width : msglen,
+				width,
 				evt->message);
 
-	/*
-	const char *msg = evt->message;
-	int printed = msglen - width;
-	int left = msglen - printed;
-	while (left > 0)
-	{
-		int print = msglen - printed > width ? width : msglen - printed;;
-		fprintf(stdout, "%*s%.*s\n", prelen, " ", print, msg+printed);
-		printed += print;
-		left -= print;
-	}
-	*/
+	// TODO this is working quite nicely, but it has one issue: words will
+	//      be ripped apart. instead, we should implement some logic that
+	//      makes sure that the message will only be split on spaces.
 
-	// TODO
-	// on twitch, if someone does not have a set color (color tag will be
-	// key only, so color->value will be NULL), the twitch client will give
-	// them a random color out of the 'free' colors (the ones that everyone
-	// can use, not only prime users). we should do the same here!
+	int offset = width;
+	while (offset < msg_len)
+	{
+		fprintf(stderr, "%*s%.*s\n", prefix_len, " ", width, evt->message + offset);
+		offset += width;
+	}
 }
 
 /*
@@ -404,26 +403,7 @@ void handle_action(twirc_state_t *s, twirc_event_t *evt)
 	twirc_tag_t *color_tag  = twirc_get_tag_by_key(evt->tags, "color");
 	twirc_tag_t *badges_tag = twirc_get_tag_by_key(evt->tags, "badges");
 
-	int is_sub = 0;
-	int is_mod = 0;
-
-	if (badges_tag && badges_tag->value)
-	{
-		if (strstr(badges_tag->value, "subscriber/"))
-		{
-			is_sub = 1;
-		}
-		if (strstr(badges_tag->value, "moderator/"))
-		{
-			is_mod = 1;
-		}
-		if (strstr(badges_tag->value, "broadcaster/"))
-		{
-			is_mod = 1;
-		}
-	}
-
-	char status = is_mod ? '@' : (is_sub ? '+' : ' ');
+	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
 
 	char nick[TWIRC_NICK_SIZE];
 	sprintf(nick, "%c%s", status, evt->origin);
@@ -439,13 +419,19 @@ void handle_action(twirc_state_t *s, twirc_event_t *evt)
 	char col_suffix[8];
 	color_suffix(meta->colormode, &rgb, col_suffix, 8);
 
-	fprintf(stdout, "%s%s%*s %s%s\n",
+	// TODO we also need to split up longs lines and left-pad additional lines.
+	//      note, however, that here, we have the additional challenge of having
+	//      to put the col_suffix at the very end.
+
+	fprintf(stdout, "%s%s%*s %s%s%s\n",
 				timestamp,
 				col_prefix,
 				meta->padding * -26, 
 				nick,
+				meta->padding ? " " : "", 
 				evt->message,
 				col_suffix);
+
 }
 
 /*
