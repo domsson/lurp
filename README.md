@@ -6,11 +6,13 @@ and outputs all chat messages to `stdout`.
 ## Dependencies
 
 - [`libtwirc`](https://github.com/domsson/libtwirc)
+- `libtinfo`
+- `libncurses`
 
 ## Building
 
-1. Install [`libtwirc`](https://github.com/domsson/libtwirc);  
-   see the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
+1. Install [`libtwirc`](https://github.com/domsson/libtwirc). 
+   See the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
    for installation instructions.
 
 2. Clone `lurp`
@@ -19,7 +21,7 @@ and outputs all chat messages to `stdout`.
 git clone https://github.com/domsson/lurp
 ````
 
-3. Run the `build` script in the `lurp` directory:
+3. Run the `build` script:
 
 ```
 cd lurp
