@@ -1,6 +1,6 @@
 # lurp 
 
-Lurp anonymously connects to a Twitch channel of your choice 
+`lurp` anonymously connects to a Twitch channel of your choice 
 and outputs all chat messages to `stdout`.
 
 ## Dependencies
@@ -9,39 +9,20 @@ and outputs all chat messages to `stdout`.
 
 ## Building
 
-1. Clone `lurp` and [`libtwirc`](https://github.com/domsson/libtwirc):
+1. Install [`libtwirc`](https://github.com/domsson/libtwirc);  
+   see the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
+   for installation instructions.
+
+2. Clone `lurp`
 
 ````
-git clone https://github.com/domsson/twircclient
-git clone https://github.com/domsson/libtwirc
+git clone https://github.com/domsson/lurp
 ````
 
-2. Build `libtwirc` with the provided `build-shared` script. 
-   It will output the `.so` and `.h` file into the `lib` subdirectory:
+3. Run the `build` script in the `lurp` directory:
 
 ```
-cd libtwirc
-chmod +x build-shared
-./build-shared
-```
-
-3. Install `libtwirc`. This will vary depending on your distro and machine, 
-   as the include paths aren't the same for all. You'll have to look up where 
-   your distro wants shared library and header files. In any case, after 
-   copying the files to their appropriate directories, you should call 
-   `ldconfig` so that your system learns about the new library. For my amd64 
-   Debian install, this does the trick (requires super user permissions):
-
-```
-cp lib/libtwirc.so /usr/lib/x86_64-linux-gnu/
-cp lib/libtwirc.h /usr/include/
-ldconfig -v -n /usr/lib
-```
-
-4. Run the `build` script in the `lurp` directory:
-
-```
-cd ../lurp
+cd lurp
 chmod +x build
 ./build
 ```
