@@ -5,6 +5,8 @@ and outputs all chat messages to `stdout`.
 
 Currently Linux only.
 
+![lurp example][example.png]
+
 ## Dependencies
 
 - [`libtwirc`](https://github.com/domsson/libtwirc)
