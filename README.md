@@ -15,19 +15,19 @@ and outputs all chat messages to `stdout`. Linux only.
 
 ## Building
 
-- Install [`libtwirc`](https://github.com/domsson/libtwirc)  
-  See the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
-  for installation instructions.
-- Clone `lurp`  
-  ```
-  git clone https://github.com/domsson/lurp
-  ```
-- Run the `build` script  
-  ```
-  cd lurp
-  chmod +x build
-  ./build
-  ```
+1. Install [`libtwirc`](https://github.com/domsson/libtwirc)  
+   See the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
+   for installation instructions.
+2. Clone `lurp`  
+   ```
+   git clone https://github.com/domsson/lurp
+   ```
+3. Run the `build` script  
+   ```
+   cd lurp
+   chmod +x build
+   ./build
+   ```
 
 ## Running
 
