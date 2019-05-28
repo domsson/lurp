@@ -302,7 +302,7 @@ char *color_suffix(int colormode, const struct rgb_color *rgb, char *buf, size_t
  */
 int is_mod(twirc_tag_t *badges)
 {
-	if (badges == NULL || badges->value == NULL)
+	if (badges == NULL)
 	{
 		return -1;
 	}
@@ -326,7 +326,7 @@ int is_mod(twirc_tag_t *badges)
  */
 int is_sub(twirc_tag_t *badges)
 {
-	if (badges == NULL || badges->value == NULL)
+	if (badges == NULL)
 	{
 		return -1;
 	}
@@ -356,13 +356,15 @@ void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
 	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
 
 	char nick[TWIRC_NICK_SIZE];
-	sprintf(nick, "%c%s", status, meta->displaynames && dname_tag && dname_tag->value ? dname_tag->value : evt->origin);
+	int use_displayname = meta->displaynames && dname_tag && strlen(dname_tag->value);
+	sprintf(nick, "%c%s", status, use_displayname ? dname_tag->value : evt->origin);
 
 	char timestamp[TIMESTAMP_BUFFER];
 	timestamp_prefix(s, timestamp, TIMESTAMP_BUFFER);
 
 	struct rgb_color white = { 255, 255, 255 };
-	struct rgb_color rgb = color_tag && color_tag->value ? hex_to_rgb(color_tag->value) : white; 
+	int has_custom_color = color_tag && strlen(color_tag->value);
+	struct rgb_color rgb = has_custom_color ? hex_to_rgb(color_tag->value) : white; 
 
 	char col_prefix[32];
 	color_prefix(meta->colormode, &rgb, col_prefix, 32);
