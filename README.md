@@ -1,9 +1,7 @@
 # lurp 
 
 `lurp` anonymously connects to a Twitch channel of your choice 
-and outputs all chat messages to `stdout`.
-
-Currently Linux only.
+and outputs all chat messages to `stdout`. Linux only.
 
 <p align="center">
    <img src="https://raw.githubusercontent.com/domsson/lurp/master/example.png" alt="lurp example">
@@ -17,37 +15,30 @@ Currently Linux only.
 
 ## Building
 
-1. Install [`libtwirc`](https://github.com/domsson/libtwirc). 
-   See the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
-   for installation instructions.
-
-2. Clone `lurp`
-
-````
-git clone https://github.com/domsson/lurp
-````
-
-3. Run the `build` script:
-
-```
-cd lurp
-chmod +x build
-./build
-```
+- Install [`libtwirc`](https://github.com/domsson/libtwirc)  
+  See the [`libtwirc` Wiki](https://github.com/domsson/libtwirc/wiki)
+  for installation instructions.
+- Clone `lurp`  
+  ```
+  git clone https://github.com/domsson/lurp
+  ```
+- Run the `build` script  
+  ```
+  cd lurp
+  chmod +x build
+  ./build
+  ```
 
 ## Running
 
-```
-./lurp -c CHANNEL [options...]
-````
+    ./lurp -c CHANNEL [options...]
 
 Example:
 
-```
-./lurp -c "#esl_csgo" -t "[%H:%M:%S]" -pb -m 4bit
-```
+    ./lurp -c "#esl_csgo" -t "[%H:%M:%S]" -pb -m 4bit
 
-The following command line options are available:
+
+### Command line options
 
 - `-c CHANNEL`: specify the channel to join; should start with `#` 
                 and be all lower-case
@@ -62,7 +53,7 @@ The following command line options are available:
                no timestamp will be printed
 - `-v`: print version information and exit
 
-## Color modes
+### Color modes
 
 `lurp` makes an educated guess as to how many colors your terminal 
 supports and tries to make use of that. However, you can override this 
