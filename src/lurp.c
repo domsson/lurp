@@ -339,7 +339,6 @@ int is_sub(char const *badges)
 	return 0;
 }
 
-// TODO
 void print_privmsg(char const *ts , char const *badges, char const *nick, char const *msg, int cmode, char const *hex) 
 {
 	struct rgb_color rgb = hex_to_rgb(hex); 
@@ -373,7 +372,6 @@ void print_privmsg_aligned(char const *ts, char const *badges, char const *nick,
 {
 }
 
-// TODO
 void print_action(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
 {
 	struct rgb_color rgb = hex_to_rgb(hex); 
