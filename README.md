@@ -1,4 +1,4 @@
-# lurp 
+# lurp = lurk and dump
 
 `lurp` anonymously connects to a Twitch channel of your choice 
 and outputs all chat messages to `stdout`. Linux only.
