@@ -387,7 +387,7 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 		int offset = width;
 		while (offset < msg_len)
 		{
-			fprintf(stderr, "%*s%.*s\n", prefix_len, " ", width, evt->message + offset);
+			fprintf(stdout, "%*s%.*s\n", prefix_len, " ", width, evt->message + offset);
 			offset += width;
 		}
 		return;
