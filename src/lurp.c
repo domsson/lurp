@@ -53,7 +53,7 @@ struct metadata
 	char *chan;              // Channel to join
 	char *timestamp;         // Timestamp format
 	int   colormode;         // Color mode
-	int   padding : 1;       // Pad nicknames to align them
+	int   align: 1;          // Align/pad nicks and messages
 	int   badges : 1;        // Print sub/mod 'badges'
 	int   verbose : 1;       // Print additional info
 	int   displaynames : 1;  // Favor display over user names
@@ -339,6 +339,74 @@ int is_sub(char const *badges)
 	return 0;
 }
 
+// TODO
+void print_privmsg(char const *ts , char const *badges, char const *nick, char const *msg, int cmode, char const *hex) 
+{
+	struct rgb_color rgb = hex_to_rgb(hex); 
+
+	char col_prefix[32];
+	color_prefix(cmode, &rgb, col_prefix, 32);
+	char col_suffix[8];
+	color_suffix(cmode, &rgb, col_suffix, 8);
+
+	//                .-- timestamp
+	//                | .-- space after timestamp
+	//                | |  .-- color start
+	//                | | | .-- badges
+	//                | | | | .-- nickname
+	//                | | | | | .-- color end
+	//                | | | | | |   .-- message
+	//                | | | | | |   |
+	fprintf(stdout, "%s%s%s%s%s%s: %s\n",
+			ts ? ts : "",
+			ts ? " " : "",
+			col_prefix,
+			badges,
+			nick,
+			col_suffix,
+			msg
+	);
+}
+
+// TODO
+void print_privmsg_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
+{
+}
+
+// TODO
+void print_action(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
+{
+	struct rgb_color rgb = hex_to_rgb(hex); 
+
+	char col_prefix[32];
+	color_prefix(cmode, &rgb, col_prefix, 32);
+	char col_suffix[8];
+	color_suffix(cmode, &rgb, col_suffix, 8);
+
+	//                .-- timestamp
+	//                | .-- space after timestamp
+	//                | |  .-- color start
+	//                | | |   .-- badges
+	//                | | |   | .-- nickname
+	//                | | |   | |  .-- message
+	//                | | |   | |  | .-- color end
+	//                | | |   | |  | |
+	fprintf(stdout, "%s%s%s* %s%s %s%s\n",
+			ts ? ts : "",
+			ts ? " " : "",
+			col_prefix,
+			badges,
+			nick,
+			msg,
+			col_suffix
+	);
+}
+
+// TODO
+void print_action_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
+{
+}
+
 void handle_message(twirc_state_t *s, twirc_event_t *evt)
 {
 	struct metadata *meta = twirc_get_context(s);
@@ -348,12 +416,32 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 	char const *dname  = twirc_get_tag_value_by_key(evt->tags, "display-name");
 	char const *tmits  = twirc_get_tag_value_by_key(evt->tags, "tmi-sent-ts");
 
-	char status = is_mod(badges) == 1 ? '@' : (is_sub(badges) == 1 ? '+' : ' ');
-
+	// Prepare nickname string
 	char nick[TWIRC_NICK_SIZE];
-	int use_displayname = meta->displaynames && !empty(dname);
-	sprintf(nick, "%c%s", status, use_displayname ? dname : evt->origin);
+	snprintf(nick, TWIRC_NICK_SIZE, "%s", meta->displaynames && !empty(dname) ? dname : evt->origin);
 
+	// Prepare badges string
+	char badge[2];
+	snprintf(badge, 2, "%c", is_mod(badges) == 1 ? '@' : (is_sub(badges) == 1 ? '+' : ' '));
+
+	// Prepare color string
+	char hex[8];
+       	snprintf(hex, 8, "%s", empty(color) ? "#FFFFFF" : color);
+
+	// Prepare timestamp string
+	char timestamp[TIMESTAMP_BUFFER];
+	timestamp_str(meta->timestamp, atoi(tmits)/1000, timestamp, TIMESTAMP_BUFFER);
+
+	if (evt->ctcp)
+	{
+		print_action(timestamp, badge, nick, evt->message, meta->colormode, hex);
+	}
+	else
+	{
+		print_privmsg(timestamp, badge, nick, evt->message, meta->colormode, hex);
+	}
+
+	/*
 	char timestamp[TIMESTAMP_BUFFER];
 	timestamp_str(meta->timestamp, atoi(tmits)/1000, timestamp, TIMESTAMP_BUFFER);
 
@@ -365,7 +453,7 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 	char col_suffix[8];
 	color_suffix(meta->colormode, &rgb, col_suffix, 8);
 
-	int prefix_len = strlen(timestamp) + (meta->padding ? 26 : strlen(nick)) + 2;
+	int prefix_len = strlen(timestamp) + (meta->align ? 26 : strlen(nick)) + 2;
 	int width = tigetnum("cols") - prefix_len;
 	int msg_len = strlen(evt->message);
 
@@ -374,7 +462,7 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 		fprintf(stdout, "%s%s%*s%s: %.*s\n",
 				timestamp,
 				col_prefix,
-				meta->padding * -26, // 25 = max nick length on Twitch, +1 for 'badge' 
+				meta->align * -26, // 25 = max nick length on Twitch, +1 for 'badge' 
 				nick,
 				col_suffix,
 				width,
@@ -398,13 +486,14 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 		fprintf(stdout, "%s%s%*s %s%s%s\n",
 				timestamp,
 				col_prefix,
-				meta->padding * -26, 
+				meta->align* -26, 
 				nick,
-				meta->padding ? " " : "", 
+				meta->align ? " " : "", 
 				evt->message,
 				col_suffix);
 		return;
 	}
+	*/
 }
 
 /*
@@ -447,11 +536,11 @@ void help(char *invocation)
 	fprintf(stdout, "\tNote: the channel should start with '#' and be all lower-case.\n");
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Options:\n");
+	fprintf(stdout, "\t-a Neatly align (left-pad) usernames and messages.\n");
 	fprintf(stdout, "\t-b Mark subscribers and mods with + and @ respectively.\n");
 	fprintf(stdout, "\t-d Use display names instead of user names where available.\n");
 	fprintf(stdout, "\t-h Print this help text and exit.\n");
 	fprintf(stdout, "\t-m MODE Set the color mode: 'true', '8bit', '4bit', '2bit' or 'none'.\n");
-	fprintf(stdout, "\t-p Left-pad usernames to align them.\n");
 	fprintf(stdout, "\t-s Print additional status information to stderr.\n");
 	fprintf(stdout, "\t-t FORMAT Enable timestamps, using the specified format.\n");
 	fprintf(stdout, "\t-v Print version information and exit.\n");
@@ -572,36 +661,36 @@ int main(int argc, char **argv)
 	// Process command line options
 	opterr = 0;
 	int o;
-	while ((o = getopt(argc, argv, "c:t:m:bdpsvh")) != -1)
+	while ((o = getopt(argc, argv, "abc:dhm:st:v")) != -1)
 	{
 		switch(o)
 		{
-			case 'c':
-				m.chan = optarg;
+			case 'a':
+				m.align = 1;
 				break;
 			case 'b':
 				m.badges = 1;
 				break;
+			case 'c':
+				m.chan = optarg;
+				break;
 			case 'd':
 				m.displaynames = 1;
 				break;
+			case 'h':
+				help(argv[0]);
+				return EXIT_SUCCESS;
 			case 'm':
 				m.colormode = color_mode(optarg, m.colormode);
-				break;
-			case 'p':
-				m.padding = 1;
-				break;
-			case 't':
-				m.timestamp = optarg;
 				break;
 			case 's':
 				m.verbose = 1;
 				break;
+			case 't':
+				m.timestamp = optarg;
+				break;
 			case 'v':
 				version();
-				return EXIT_SUCCESS;
-			case 'h':
-				help(argv[0]);
 				return EXIT_SUCCESS;
 		}
 	}
@@ -648,8 +737,6 @@ int main(int argc, char **argv)
 	cbs->connect         = handle_connect;
 	cbs->welcome         = handle_welcome;
 	cbs->join            = handle_join;
-	//cbs->action          = handle_action;
-	//cbs->privmsg         = handle_privmsg;
 	cbs->action          = handle_message;
 	cbs->privmsg         = handle_message;
 	cbs->disconnect      = handle_disconnect;

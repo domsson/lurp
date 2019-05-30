@@ -46,8 +46,8 @@ Example:
         for moderators and subscribers respectively
 - `-d`: use display names instead of user names where available
 - `-h`: print help text and exit
-- `-m MODE`: manually specify the color mode, see below.
-- `-p`: use padding to align all user names and messages neatly
+- `-m MODE`: manually specify the color mode, see below
+- `-a`: Neatly align (left-pad) usernames and messages
 - `-s`: print additional status information
 - `-t FORMAT`: specify a timestamp format; if `-t` isn't given, 
                no timestamp will be printed
