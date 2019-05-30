@@ -48,6 +48,7 @@ Example:
 - `-h`: print help text and exit
 - `-m MODE`: manually specify the color mode, see below
 - `-a`: Neatly align (left-pad) usernames and messages
+- `-r`: Use server-provided timestamp instead of local time
 - `-s`: print additional status information
 - `-t FORMAT`: specify a timestamp format; if `-t` isn't given, 
                no timestamp will be printed
