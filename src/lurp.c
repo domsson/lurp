@@ -56,6 +56,7 @@ struct metadata
 	int   align: 1;          // Align/pad nicks and messages
 	int   badges : 1;        // Print sub/mod 'badges'
 	int   verbose : 1;       // Print additional info
+	int   twitchtime : 1;    // Use the Twitch provided timestamp
 	int   displaynames : 1;  // Favor display over user names
 };
 
@@ -405,7 +406,7 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 
 	// Prepare badges string
 	char badge[2];
-	snprintf(badge, 2, "%c", is_mod(badges) == 1 ? '@' : (is_sub(badges) == 1 ? '+' : ' '));
+	snprintf(badge, 2, "%s", is_mod(badges) == 1 ? "@" : (is_sub(badges) == 1 ? "+" : ""));
 
 	// Prepare color string
 	char hex[8];
@@ -413,7 +414,8 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 
 	// Prepare timestamp string
 	char timestamp[TIMESTAMP_BUFFER];
-	timestamp_str(meta->timestamp, atoi(tmits)/1000, timestamp, TIMESTAMP_BUFFER);
+	int ts = meta->twitchtime ? atoi(tmits)/1000 : 0;
+	timestamp_str(meta->timestamp, ts, timestamp, TIMESTAMP_BUFFER);
 
 	if (evt->ctcp)
 	{
@@ -425,21 +427,6 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 	}
 
 	/*
-	char timestamp[TIMESTAMP_BUFFER];
-	timestamp_str(meta->timestamp, atoi(tmits)/1000, timestamp, TIMESTAMP_BUFFER);
-
-	struct rgb_color white = { 255, 255, 255 };
-	struct rgb_color rgb = !empty(color) ? hex_to_rgb(color) : white; 
-
-	char col_prefix[32];
-	color_prefix(meta->colormode, &rgb, col_prefix, 32);
-	char col_suffix[8];
-	color_suffix(meta->colormode, &rgb, col_suffix, 8);
-
-	int prefix_len = strlen(timestamp) + (meta->align ? 26 : strlen(nick)) + 2;
-	int width = tigetnum("cols") - prefix_len;
-	int msg_len = strlen(evt->message);
-
 	if (strcmp(evt->command, "PRIVMSG") == 0)
 	{
 		fprintf(stdout, "%s%s%*s%s: %.*s\n",
@@ -524,6 +511,7 @@ void help(char *invocation)
 	fprintf(stdout, "\t-d Use display names instead of user names where available.\n");
 	fprintf(stdout, "\t-h Print this help text and exit.\n");
 	fprintf(stdout, "\t-m MODE Set the color mode: 'true', '8bit', '4bit', '2bit' or 'none'.\n");
+	fprintf(stdout, "\t-r Use the server-supplied timestamp instead of the local time.\n");
 	fprintf(stdout, "\t-s Print additional status information to stderr.\n");
 	fprintf(stdout, "\t-t FORMAT Enable timestamps, using the specified format.\n");
 	fprintf(stdout, "\t-v Print version information and exit.\n");
@@ -644,7 +632,7 @@ int main(int argc, char **argv)
 	// Process command line options
 	opterr = 0;
 	int o;
-	while ((o = getopt(argc, argv, "abc:dhm:st:v")) != -1)
+	while ((o = getopt(argc, argv, "abc:dhm:rst:v")) != -1)
 	{
 		switch(o)
 		{
@@ -665,6 +653,9 @@ int main(int argc, char **argv)
 				return EXIT_SUCCESS;
 			case 'm':
 				m.colormode = color_mode(optarg, m.colormode);
+				break;
+			case 'r':
+				m.twitchtime = 1;
 				break;
 			case 's':
 				m.verbose = 1;
