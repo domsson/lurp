@@ -99,37 +99,37 @@ struct rgb_color
 };
 
 /*
- * Constructs a timestamp according to the timestamp format saved in the metadata
- * that should be in the state's context and adds a space to it, so it can be 
- * directly used as a prefix for chat messages. If there is no timestamp format,
- * it simply puts an empty string into the provided buffer.
+ * Returns 0 if str is NULL or empty, otherwise 1.
  */
-char *timestamp_prefix(twirc_state_t *s, char *buf, size_t len)
+int empty(char const *str)
 {
-	// Initialize to empty string
+	return str == NULL || str[0] == '\0';
+}
+
+/*
+ * Creates a timestamp string according to format, stores it in buf and returns
+ * the pointer to buf for convenience. If format is NULL, buf will be set to an 
+ * empty string. If timestamp is 0, the current time will be used.
+ */
+char *timestamp_str(char const *format, int timestamp, char *buf, size_t len)
+{
+	// Make sure buf contains an empty string
 	buf[0] = '\0';
 
-	// Get the metadata from the state context
-	struct metadata *meta = twirc_get_context(s);
-
-	// Stop if we're not supposed to show a timestamp
-	if (!meta->timestamp)
+	// Leave it at that if format isn't given
+	if (format == NULL)
 	{
 		return buf;
 	}
 
 	// Let's get the current time for a nice timestamp
-	time_t t = time(NULL);
+	time_t t = timestamp ? timestamp : time(NULL);
 	struct tm lt = *localtime(&t);
 
 	// Let's run the time through strftime() for format
-	strftime(buf, len - 1, meta->timestamp, &lt);
+	strftime(buf, len, format, &lt);
 
-	// Let's make sure there is a space after the string
-	size_t actual_len = strlen(buf);
-	buf[actual_len] = ' '; // Add a space, overwriting null terminator
-	buf[actual_len+1] = 0; // Add null terminator again
-
+	// Return the handed in buf for convenience
 	return buf;
 }
 
@@ -300,19 +300,19 @@ char *color_suffix(int colormode, const struct rgb_color *rgb, char *buf, size_t
  * or the broadcaster of the channel the event occurred in.
  * Returns 1 for mods, 0 for non-mods, -1 on error.
  */
-int is_mod(twirc_tag_t *badges)
+int is_mod(char const *badges)
 {
 	if (badges == NULL)
 	{
 		return -1;
 	}
 
-	if (strstr(badges->value, "moderator/"))
+	if (strstr(badges, "moderator/"))
 	{
 		return 1;
 	}
 
-	if (strstr(badges->value, "broadcaster/"))
+	if (strstr(badges, "broadcaster/"))
 	{
 		return 1;
 	}
@@ -324,14 +324,14 @@ int is_mod(twirc_tag_t *badges)
  * Given the "badges" tag, determines if the origin is a subscriber.
  * Returns 1 for subs, 0 for non-subs, -1 on error.
  */
-int is_sub(twirc_tag_t *badges)
+int is_sub(char const *badges)
 {
 	if (badges == NULL)
 	{
 		return -1;
 	}
 
-	if (strstr(badges->value, "subscriber/"))
+	if (strstr(badges, "subscriber/"))
 	{
 		return 1;
 	}
@@ -339,32 +339,26 @@ int is_sub(twirc_tag_t *badges)
 	return 0;
 }
 
-/*
- * Called when a user sends a message to a channel. In other words, chat!
- * 'evt->origin' will contain the username of the person who sent the message,
- * 'evt->channel' will contain the channel the message was sent to,
- * 'evt->message' will contain the actual chat message.
- */
-void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
+void handle_message(twirc_state_t *s, twirc_event_t *evt)
 {
 	struct metadata *meta = twirc_get_context(s);
 
-	twirc_tag_t *color_tag  = twirc_get_tag_by_key(evt->tags, "color");
-	twirc_tag_t *badges_tag = twirc_get_tag_by_key(evt->tags, "badges");
-	twirc_tag_t *dname_tag  = twirc_get_tag_by_key(evt->tags, "display-name");
+	char const *color  = twirc_get_tag_value_by_key(evt->tags, "color");
+	char const *badges = twirc_get_tag_value_by_key(evt->tags, "badges");
+	char const *dname  = twirc_get_tag_value_by_key(evt->tags, "display-name");
+	char const *tmits  = twirc_get_tag_value_by_key(evt->tags, "tmi-sent-ts");
 
-	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
+	char status = is_mod(badges) == 1 ? '@' : (is_sub(badges) == 1 ? '+' : ' ');
 
 	char nick[TWIRC_NICK_SIZE];
-	int use_displayname = meta->displaynames && dname_tag && strlen(dname_tag->value);
-	sprintf(nick, "%c%s", status, use_displayname ? dname_tag->value : evt->origin);
+	int use_displayname = meta->displaynames && !empty(dname);
+	sprintf(nick, "%c%s", status, use_displayname ? dname : evt->origin);
 
 	char timestamp[TIMESTAMP_BUFFER];
-	timestamp_prefix(s, timestamp, TIMESTAMP_BUFFER);
+	timestamp_str(meta->timestamp, atoi(tmits)/1000, timestamp, TIMESTAMP_BUFFER);
 
 	struct rgb_color white = { 255, 255, 255 };
-	int has_custom_color = color_tag && strlen(color_tag->value);
-	struct rgb_color rgb = has_custom_color ? hex_to_rgb(color_tag->value) : white; 
+	struct rgb_color rgb = !empty(color) ? hex_to_rgb(color) : white; 
 
 	char col_prefix[32];
 	color_prefix(meta->colormode, &rgb, col_prefix, 32);
@@ -375,7 +369,9 @@ void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
 	int width = tigetnum("cols") - prefix_len;
 	int msg_len = strlen(evt->message);
 
-	fprintf(stdout, "%s%s%*s%s: %.*s\n",
+	if (strcmp(evt->command, "PRIVMSG") == 0)
+	{
+		fprintf(stdout, "%s%s%*s%s: %.*s\n",
 				timestamp,
 				col_prefix,
 				meta->padding * -26, // 25 = max nick length on Twitch, +1 for 'badge' 
@@ -384,52 +380,22 @@ void handle_privmsg(twirc_state_t *s, twirc_event_t *evt)
 				width,
 				evt->message);
 
-	// TODO this is working quite nicely, but it has one issue: words will
-	//      be ripped apart. instead, we should implement some logic that
-	//      makes sure that the message will only be split on spaces.
+		// TODO this is working quite nicely, but it has one issue: words will
+		//      be ripped apart. instead, we should implement some logic that
+		//      makes sure that the message will only be split on spaces.
 
-	int offset = width;
-	while (offset < msg_len)
-	{
-		fprintf(stderr, "%*s%.*s\n", prefix_len, " ", width, evt->message + offset);
-		offset += width;
+		int offset = width;
+		while (offset < msg_len)
+		{
+			fprintf(stderr, "%*s%.*s\n", prefix_len, " ", width, evt->message + offset);
+			offset += width;
+		}
+		return;
 	}
-}
 
-/*
- * Called when a user uses the "/me" command in a channel.
- * This is pretty much the same as the privmsg, just that the output is usually
- * stylized to differentiate it from regular chat messages.
- */
-void handle_action(twirc_state_t *s, twirc_event_t *evt)
-{
-	struct metadata *meta = twirc_get_context(s);
-
-	twirc_tag_t *color_tag  = twirc_get_tag_by_key(evt->tags, "color");
-	twirc_tag_t *badges_tag = twirc_get_tag_by_key(evt->tags, "badges");
-	twirc_tag_t *dname_tag  = twirc_get_tag_by_key(evt->tags, "display-name");
-
-	char status = is_mod(badges_tag)==1 ? '@' : (is_sub(badges_tag)==1 ? '+' : ' ');
-
-	char nick[TWIRC_NICK_SIZE];
-	sprintf(nick, "%c%s", status, meta->displaynames && dname_tag && dname_tag->value ? dname_tag->value : evt->origin);
-
-	char timestamp[TIMESTAMP_BUFFER];
-	timestamp_prefix(s, timestamp, TIMESTAMP_BUFFER);
-
-	struct rgb_color white = { 255, 255, 255 };
-	struct rgb_color rgb = color_tag && color_tag->value ? hex_to_rgb(color_tag->value) : white; 
-
-	char col_prefix[32];
-	color_prefix(meta->colormode, &rgb, col_prefix, 32);
-	char col_suffix[8];
-	color_suffix(meta->colormode, &rgb, col_suffix, 8);
-
-	// TODO we also need to split up longs lines and left-pad additional lines.
-	//      note, however, that here, we have the additional challenge of having
-	//      to put the col_suffix at the very end.
-
-	fprintf(stdout, "%s%s%*s %s%s%s\n",
+	if (strcmp(evt->command, "ACTION") == 0)
+	{
+		fprintf(stdout, "%s%s%*s %s%s%s\n",
 				timestamp,
 				col_prefix,
 				meta->padding * -26, 
@@ -437,7 +403,8 @@ void handle_action(twirc_state_t *s, twirc_event_t *evt)
 				meta->padding ? " " : "", 
 				evt->message,
 				col_suffix);
-
+		return;
+	}
 }
 
 /*
@@ -681,8 +648,10 @@ int main(int argc, char **argv)
 	cbs->connect         = handle_connect;
 	cbs->welcome         = handle_welcome;
 	cbs->join            = handle_join;
-	cbs->action          = handle_action;
-	cbs->privmsg         = handle_privmsg;
+	//cbs->action          = handle_action;
+	//cbs->privmsg         = handle_privmsg;
+	cbs->action          = handle_message;
+	cbs->privmsg         = handle_message;
 	cbs->disconnect      = handle_disconnect;
 	
 	// Connect to the IRC server
