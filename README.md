@@ -35,7 +35,7 @@ and outputs all chat messages to `stdout`. Linux only.
 
 Example:
 
-    ./lurp -c "#esl_csgo" -t "[%H:%M:%S]" -pb -m 4bit
+    ./lurp -c "#esl_csgo" -t "[%H:%M:%S]" -ab -m 4bit
 
 
 ### Command line options
