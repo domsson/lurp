@@ -307,17 +307,7 @@ int is_mod(char const *badges)
 		return -1;
 	}
 
-	if (strstr(badges, "moderator/"))
-	{
-		return 1;
-	}
-
-	if (strstr(badges, "broadcaster/"))
-	{
-		return 1;
-	}
-
-	return 0;
+	return strstr(badges, "moderator") || strstr(badges, "broadcaster");
 }
 
 /*
@@ -331,12 +321,7 @@ int is_sub(char const *badges)
 		return -1;
 	}
 
-	if (strstr(badges, "subscriber/"))
-	{
-		return 1;
-	}
-
-	return 0;
+	return strstr(badges, "subscriber") ? 1 : 0;
 }
 
 void print_privmsg(char const *ts , char const *badges, char const *nick, char const *msg, int cmode, char const *hex) 
