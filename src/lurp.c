@@ -1,14 +1,13 @@
 #include <stdio.h>      // NULL, fprintf(), perror(), setlinebuf()
 #include <string.h>     // strcmp()
 #include <stdlib.h>     // NULL, EXIT_FAILURE, EXIT_SUCCESS
-#include <unistd.h>     // isatty()
+#include <unistd.h>     // isatty(), STDOUT_FILENO
 #include <errno.h>      // errno
 #include <unistd.h>     // getopt() et al.
 #include <sys/types.h>  // ssize_t
 #include <signal.h>
 #include <time.h>
-#include <curses.h>	// terminfo capability access
-#include <term.h>	// terminfo capability access
+#include <sys/ioctl.h>	// ioctl() to get terminal dimensions
 #include "libtwirc.h"
 
 #define VERSION_MAJOR 0
@@ -105,6 +104,27 @@ struct rgb_color
 int empty(char const *str)
 {
 	return str == NULL || str[0] == '\0';
+}
+
+/**
+ * Tries to determine the current size of the terminal window and returns them.
+ * If a dimension can't be determined, width and/or height will be set to 0.
+ * Returns 0 on success, -1 on error (TIOCGWINSZ not defined on your system).
+ */
+int termsize(size_t *w, size_t *h)
+{
+#ifdef TIOCGWINSZ
+	struct winsize ws;
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0)
+        {
+            *w = (ws.ws_row >= 0) ? ws.ws_col : 0;
+            *h = (ws.ws_col >= 0) ? ws.ws_row : 0;
+	    return 0;
+        }
+#endif
+	*w = 0;
+	*h = 0;
+	return -1;
 }
 
 /*
@@ -356,6 +376,71 @@ void print_privmsg(char const *ts , char const *badges, char const *nick, char c
 // TODO
 void print_privmsg_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
 {
+	struct rgb_color rgb = hex_to_rgb(hex); 
+
+	char col_prefix[32];
+	color_prefix(cmode, &rgb, col_prefix, 32);
+	char col_suffix[8];
+	color_suffix(cmode, &rgb, col_suffix, 8);
+
+	/*
+	//         .-- max user/display name length on Twitch
+	//         |    .-- badges should only be '@' or '+'
+	//         |    |        .-- 1 if badge is present, 0 otherwise
+	//         |    |        |               .-- length of user/display name
+	//         |    |        |               |
+	int pad = (25 + 1) - !empty(badges) - strwidth(nick);
+
+	// We only print the message header for now:
+	//
+	//                .-- timestamp
+	//                | .-- space after timestamp
+	//                | |  .-- spaces for padding
+	//                | |  | .-- color start
+	//                | |  | | .-- badges
+	//                | |  | | | .-- nickname
+	//                | |  | | | | .-- color end
+	//                | | /| | | | |
+	fprintf(stdout, "%s%s%*s%s%s%s%s: ",
+			ts ? ts : "",
+			ts ? " " : "",
+			pad,
+			"",
+			col_prefix,
+			badges,
+			nick,
+			col_suffix
+	);
+	*/
+	
+	char name[64];
+	snprintf(name, 64, "%s%s", badges, nick);
+
+		
+	// We only print the message header for now:
+	//
+	//                .-- timestamp
+	//                | .-- space after timestamp
+	//                | | .-- color start
+	//                | | |  .-- padded nick
+	//                | | |  | .-- color end
+	//                | | | /| | 
+	fprintf(stdout, "%s%s%s%*s%s: ",
+			ts ? ts : "",
+			ts ? " " : "",
+			col_prefix,
+			26,
+			name,
+			col_suffix
+	);
+	
+	// TODO split this up (on word boundaries!) into multiple lines,
+	//      each aligned under the first line; non too long for the 
+	//      space available (get via tigetnum("cols"), but know that
+	//      this value won't update as a user resize the terminal
+	//      window... which sucks)
+	// We now print the message
+	fprintf(stdout, "%s\n", msg);
 }
 
 void print_action(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
@@ -423,7 +508,15 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 	}
 	else
 	{
-		print_privmsg(timestamp, badge, nick, evt->message, meta->colormode, hex);
+		if (meta->align)
+		{
+			print_privmsg_aligned(timestamp, badge, nick, evt->message, meta->colormode, hex);
+		}
+		else
+		{
+			print_privmsg(timestamp, badge, nick, evt->message, meta->colormode, hex);
+		}
+
 	}
 
 	/*
@@ -489,6 +582,19 @@ void sigint_handler(int sig)
 	handled = sig;
 }
 
+void sigwin_handler(int sig)
+{
+
+	// https://www.unix.com/programming/136867-curses-not-updating-lines-cols.html
+	// http://www.delorie.com/djgpp/doc/libc/libc_495.html
+	struct winsize sz;
+	ioctl(0, TIOCGWINSZ, &sz);
+	fprintf(stderr, "Screen width: %i  Screen height: %i\n", sz.ws_col, sz.ws_row);
+
+	handled = sig;
+}
+
+
 void version()
 {
 	fprintf(stdout, "%s version %d.%d.%d - %s\n",
@@ -520,7 +626,11 @@ void help(char *invocation)
 }
 
 /*
- * Assumes that setuppterm() has been called before calling this method
+ * Tries to determine the terminal's color capabilities by looking at the 
+ * TERM and COLORTERM environment variables and, based on this, returns an
+ * educated guess as to which is the highest supported color mode. In case
+ * no hints to the color mode can be found in either variable, this function
+ * errors on the safe side and returns COLOR_MODE_NONE.
  */
 int detect_color_mode()
 {
@@ -528,32 +638,6 @@ int detect_color_mode()
 	if (!isatty(fileno(stdout)))
 	{
 		return COLOR_MODE_NONE; 
-	}
-
-	// TODO TEMP, delete later
-	//fprintf(stderr, "%d x %d (width x height)\n", tigetnum("cols"), tigetnum("lines"));
-
-	// Query number of colors from terminfo	
-	int num_colors = tigetnum("colors");
-	if (num_colors == 16777216)
-	{
-		return COLOR_MODE_TRUE;
-	}
-	if (num_colors >= 256)
-	{
-		return COLOR_MODE_8BIT;
-	}
-	if (num_colors >= 16)
-	{
-		return COLOR_MODE_4BIT;
-	}
-	if (num_colors >= 8)
-	{
-		return COLOR_MODE_2BIT;
-	}
-	if (num_colors >= 1)
-	{
-		return COLOR_MODE_NONE;
 	}
 
 	// Check terminal name for suffix '-m' or '-256'
@@ -612,6 +696,7 @@ int color_mode(const char *mode, int fallback)
 	return fallback;
 }
 
+
 /*
  * Main - this is where we make things happen!
  */
@@ -620,9 +705,6 @@ int main(int argc, char **argv)
 	// Set stdout to line buffered
 	setlinebuf(stdout);
 	
-	// Initialize terminfo database access
-	setupterm(NULL, fileno(stdout), (int *)0);
-
 	// Get a metadata struct	
 	struct metadata m = { 0 };
 	
@@ -688,9 +770,27 @@ int main(int argc, char **argv)
 	};
 	
 	// These might return -1 on error, but we'll ignore that for now
-	sigaction(SIGINT, &sa_int, NULL);
+	sigaction(SIGINT,  &sa_int, NULL);
 	sigaction(SIGQUIT, &sa_int, NULL);
 	sigaction(SIGTERM, &sa_int, NULL);
+
+
+	// Register a handler for when the terminal window size changed
+	// TODO issue with libtwirc: registering a handler for SIGWINCH,
+	// which is usually ignored by default, will lead to epoll_wait()
+	// to return an error once the signal is caught; this leads to the
+	// main loop to end and therefore to lurp shutting down, even though
+	// the connection to the server wasn't lost at all. We could either
+	// work around the problem here, by using a way more complicated main
+	// loop logic, or we attempt to fix the problem in libtwirc by setting
+	// the sigmask just before the call to epoll_wait, then resetting it
+	// right after... or maybe there are other, even better solutions?
+	struct sigaction sa_win = {
+		.sa_handler = &sigwin_handler
+	};
+
+	// Again, this might return -1 on error, handle it eventually
+	sigaction(SIGWINCH, &sa_win, NULL);
 
 	// Create libtwirc state instance
 	twirc_state_t *s = twirc_init();
@@ -733,6 +833,11 @@ int main(int argc, char **argv)
 	while (twirc_tick(s, 1000) == 0 && running == 1)
 	{
 		// Nothing to do here - it's all done via the event handlers
+	}
+
+	if (twirc_get_last_error(s) < 0)
+	{
+		fprintf(stderr, "*** Last error: %d\n", twirc_get_last_error(s));
 	}
 
 	// twirc_kill() is a convenience functions that calls two functions:

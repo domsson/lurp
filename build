@@ -1,1 +1,1 @@
-gcc -g -Wall src/lurp.c -o bin/lurp -ltwirc -ltinfo
+gcc -g -Wall src/lurp.c -o bin/lurp -ltwirc 
