@@ -10,8 +10,6 @@ and outputs all chat messages to `stdout`. Linux only.
 ## Dependencies
 
 - [`libtwirc`](https://github.com/domsson/libtwirc)
-- `libtinfo`
-- `libncurses`
 
 ## Building
 
