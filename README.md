@@ -40,8 +40,8 @@ Example:
 
 - `-c CHANNEL`: specify the channel to join; should start with `#` 
                 and be all lower-case
-- `-b`: prefix usernames with `@` and/or `+` 
-        for moderators and subscribers respectively
+- `-b`: prefix usernames with `@` or `+` 
+        for moderators or subscribers respectively (`@` has precedence)
 - `-d`: use display names instead of user names where available
 - `-h`: print help text and exit
 - `-m MODE`: manually specify the color mode, see below
