@@ -467,44 +467,22 @@ void print_privmsg(char const *ts, char const *badges, char const *nick, char *m
 	print_msg_body(msg, COLOR_MODE_NONE, hex, 0, 0);
 }
 
-// TODO
 void print_privmsg_aligned(char const *ts, char const *badges, char const *nick, char *msg, int cmode, char const *hex, size_t tw)
 {
 	size_t pad = print_msg_head(ts, badges, nick, cmode, hex, 0, tw);
 	print_msg_body(msg, COLOR_MODE_NONE, hex, tw, pad);	
 }
 
-void print_action(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
+void print_action(char const *ts, char const *badges, char const *nick, char *msg, int cmode, char const *hex)
 {
-	struct rgb_color rgb = hex_to_rgb(hex); 
-
-	char col_prefix[32];
-	color_prefix(cmode, &rgb, col_prefix, 32);
-	char col_suffix[8];
-	color_suffix(cmode, &rgb, col_suffix, 8);
-
-	//                .-- timestamp
-	//                | .-- space after timestamp
-	//                | |  .-- color start
-	//                | | |   .-- badges
-	//                | | |   | .-- nickname
-	//                | | |   | |  .-- message
-	//                | | |   | |  | .-- color end
-	//                | | |   | |  | |
-	fprintf(stdout, "%s%s%s* %s%s %s%s\n",
-			ts ? ts : "",
-			ts ? " " : "",
-			col_prefix,
-			badges,
-			nick,
-			msg,
-			col_suffix
-	);
+	print_msg_head(ts, badges, nick, cmode, hex, 1, 0);
+	print_msg_body(msg, cmode, hex, 0, 0);
 }
 
-// TODO
-void print_action_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex, size_t tw)
+void print_action_aligned(char const *ts, char const *badges, char const *nick, char *msg, int cmode, char const *hex, size_t tw)
 {
+	size_t pad = print_msg_head(ts, badges, nick, cmode, hex, 1, tw);
+	print_msg_body(msg, cmode, hex, tw, pad);	
 }
 
 void handle_message(twirc_state_t *s, twirc_event_t *evt)
