@@ -45,6 +45,7 @@
 
 
 static volatile int running; // Used to stop main loop in case of SIGINT etc
+static volatile int resized; // Used to signal that the terminal size changed 
 static volatile int handled; // The last signal that has been handled
 
 struct metadata
@@ -57,6 +58,8 @@ struct metadata
 	int   verbose : 1;       // Print additional info
 	int   twitchtime : 1;    // Use the Twitch provided timestamp
 	int   displaynames : 1;  // Favor display over user names
+	size_t term_width;	 // Terminal width in characters
+	size_t term_height;	 // Terminal height in characters
 };
 
 /*
@@ -113,6 +116,8 @@ int empty(char const *str)
  */
 int termsize(size_t *w, size_t *h)
 {
+	// https://www.unix.com/programming/136867-curses-not-updating-lines-cols.html
+	// http://www.delorie.com/djgpp/doc/libc/libc_495.html
 #ifdef TIOCGWINSZ
 	struct winsize ws;
 	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0)
@@ -345,7 +350,7 @@ int is_sub(char const *badges)
 	return strstr(badges, "subscriber") ? 1 : 0;
 }
 
-void print_privmsg(char const *ts , char const *badges, char const *nick, char const *msg, int cmode, char const *hex) 
+size_t print_msg_head(char const *ts, char const *badges, char const *nick, int cmode, char const *hex, int action, size_t tw)
 {
 	struct rgb_color rgb = hex_to_rgb(hex); 
 
@@ -354,93 +359,119 @@ void print_privmsg(char const *ts , char const *badges, char const *nick, char c
 	char col_suffix[8];
 	color_suffix(cmode, &rgb, col_suffix, 8);
 
-	//                .-- timestamp
-	//                | .-- space after timestamp
-	//                | |  .-- color start
-	//                | | | .-- badges
-	//                | | | | .-- nickname
-	//                | | | | | .-- color end
-	//                | | | | | |   .-- message
-	//                | | | | | |   |
-	fprintf(stdout, "%s%s%s%s%s%s: %s\n",
-			ts ? ts : "",
-			ts ? " " : "",
-			col_prefix,
-			badges,
-			nick,
-			col_suffix,
-			msg
-	);
-}
-
-// TODO
-void print_privmsg_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
-{
-	struct rgb_color rgb = hex_to_rgb(hex); 
-
-	char col_prefix[32];
-	color_prefix(cmode, &rgb, col_prefix, 32);
-	char col_suffix[8];
-	color_suffix(cmode, &rgb, col_suffix, 8);
-
-	/*
-	//         .-- max user/display name length on Twitch
-	//         |    .-- badges should only be '@' or '+'
-	//         |    |        .-- 1 if badge is present, 0 otherwise
-	//         |    |        |               .-- length of user/display name
-	//         |    |        |               |
-	int pad = (25 + 1) - !empty(badges) - strwidth(nick);
-
-	// We only print the message header for now:
-	//
-	//                .-- timestamp
-	//                | .-- space after timestamp
-	//                | |  .-- spaces for padding
-	//                | |  | .-- color start
-	//                | |  | | .-- badges
-	//                | |  | | | .-- nickname
-	//                | |  | | | | .-- color end
-	//                | | /| | | | |
-	fprintf(stdout, "%s%s%*s%s%s%s%s: ",
-			ts ? ts : "",
-			ts ? " " : "",
-			pad,
-			"",
-			col_prefix,
-			badges,
-			nick,
-			col_suffix
-	);
-	*/
-	
 	char name[64];
 	snprintf(name, 64, "%s%s", badges, nick);
 
-		
+	//                      .-- timestamp
+	//                      |            .-- 1 for space after timestamp       
+	//                      |            |        .-- badge char (1) + nick (max 25)
+	//                      |            |        |    .-- ": " or "  "
+	//                      |            |        |    |
+	size_t header_len = strlen(ts) + !empty(ts) + 26 + 2;
+	int padding = header_len > tw ? 0 : 26;
+
 	// We only print the message header for now:
 	//
-	//                .-- timestamp
-	//                | .-- space after timestamp
-	//                | | .-- color start
-	//                | | |  .-- padded nick
-	//                | | |  | .-- color end
-	//                | | | /| | 
-	fprintf(stdout, "%s%s%s%*s%s: ",
-			ts ? ts : "",
-			ts ? " " : "",
+	//                        .-- timestamp
+	//                        | .-- space after timestamp
+	//                        | | .-- color start
+	//                        | | |  .-- padded nick
+	//                        | | |  | .-- color end
+	//                        | | | /| | .-- ": "
+	//                        | | | || | | 
+	int p = fprintf(stdout, "%s%s%s%*s%s%s",
+			ts,
+			empty(ts) ? "" : " ",
 			col_prefix,
-			26,
+			padding,
 			name,
-			col_suffix
+			col_suffix,
+			action ? "  " : ": "
 	);
-	
-	// TODO split this up (on word boundaries!) into multiple lines,
-	//      each aligned under the first line; non too long for the 
-	//      space available (get via tigetnum("cols"), but know that
-	//      this value won't update as a user resize the terminal
-	//      window... which sucks)
-	// We now print the message
-	fprintf(stdout, "%s\n", msg);
+
+	return p - strlen(col_prefix) - strlen(col_suffix);
+}
+
+size_t print_msg_body(char *msg, int cmode, char const *hex, size_t tw, int pad)
+{
+	struct rgb_color rgb = hex_to_rgb(hex); 
+
+	char col_prefix[32];
+	color_prefix(cmode, &rgb, col_prefix, 32);
+	char col_suffix[8];
+	color_suffix(cmode, &rgb, col_suffix, 8);
+
+	if (tw == 0)
+	{
+		return fprintf(stdout, "%s%s%s\n", col_prefix, msg, col_suffix);
+	}
+
+	// If this is an action message ("/me", cmode will be != 0), we color it 
+	fprintf(stdout, "%s", col_prefix);
+
+	// TODO this smells, I feel like we can do this with a third of the code
+	// TODO it also doesn't work, lul
+
+	int i = 0;                    // words printed total
+	int w = 0;                    // words printed on the current line
+	char *tok = NULL;             // current word to print
+	size_t tok_len = 0;           // length of current token
+	size_t width = tw - pad;      // width available per line
+	size_t width_left = width;    // space left in the current line
+
+	for (; (tok = strtok(i == 0 ? msg : NULL, " ")); ++i)
+	{
+		tok_len = strlen(tok);
+
+		// In case the word will never fit on the terminal...
+		if (tok_len > width)
+		{
+			// ...we just print it and fuck up alignment
+			// TODO obviously, we should instead just split
+			// the word up, print the remainder on the next line
+			fprintf(stdout, "%s", tok);
+			w++;
+		}
+
+		// In case there is enough space left for the word... 
+		else if (tok_len <= width_left)
+		{
+			// ...we print it, maybe with a space before it
+			fprintf(stdout, "%s%s", w > 0 ? " " : "", tok);
+			width_left -= tok_len + (w > 0);
+			w++;
+		}	
+
+		// Not enough space for the word left on this line...
+		else
+		{
+			// ...so we need a line break and padding
+			fprintf(stdout, "\n");
+			// And now reset the available width size
+			width_left = width;
+			fprintf(stdout, "%*s%s", pad, "", tok);
+			width_left = width - tok_len;
+			w++;
+		}
+	}
+
+	// Finally, add the last line break (and end the color code)
+	fprintf(stdout, "%s\n", col_suffix);
+
+	return 0;
+}
+
+void print_privmsg(char const *ts, char const *badges, char const *nick, char *msg, int cmode, char const *hex) 
+{
+	print_msg_head(ts, badges, nick, cmode, hex, 0, 0);
+	print_msg_body(msg, COLOR_MODE_NONE, hex, 0, 0);
+}
+
+// TODO
+void print_privmsg_aligned(char const *ts, char const *badges, char const *nick, char *msg, int cmode, char const *hex, size_t tw)
+{
+	size_t pad = print_msg_head(ts, badges, nick, cmode, hex, 0, tw);
+	print_msg_body(msg, COLOR_MODE_NONE, hex, tw, pad);	
 }
 
 void print_action(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
@@ -472,7 +503,7 @@ void print_action(char const *ts, char const *badges, char const *nick, char con
 }
 
 // TODO
-void print_action_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex)
+void print_action_aligned(char const *ts, char const *badges, char const *nick, char const *msg, int cmode, char const *hex, size_t tw)
 {
 }
 
@@ -480,10 +511,10 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 {
 	struct metadata *meta = twirc_get_context(s);
 
-	char const *color  = twirc_get_tag_value_by_key(evt->tags, "color");
-	char const *badges = twirc_get_tag_value_by_key(evt->tags, "badges");
-	char const *dname  = twirc_get_tag_value_by_key(evt->tags, "display-name");
-	char const *tmits  = twirc_get_tag_value_by_key(evt->tags, "tmi-sent-ts");
+	char const *color  = twirc_get_tag_value(evt->tags, "color");
+	char const *badges = twirc_get_tag_value(evt->tags, "badges");
+	char const *dname  = twirc_get_tag_value(evt->tags, "display-name");
+	char const *tmits  = twirc_get_tag_value(evt->tags, "tmi-sent-ts");
 
 	// Prepare nickname string
 	char nick[TWIRC_NICK_SIZE];
@@ -504,13 +535,20 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 
 	if (evt->ctcp)
 	{
-		print_action(timestamp, badge, nick, evt->message, meta->colormode, hex);
+		if (meta->align)
+		{
+			print_action_aligned(timestamp, badge, nick, evt->message, meta->colormode, hex, meta->term_width);
+		}
+		else
+		{
+			print_action(timestamp, badge, nick, evt->message, meta->colormode, hex);
+		}
 	}
 	else
 	{
 		if (meta->align)
 		{
-			print_privmsg_aligned(timestamp, badge, nick, evt->message, meta->colormode, hex);
+			print_privmsg_aligned(timestamp, badge, nick, evt->message, meta->colormode, hex, meta->term_width);
 		}
 		else
 		{
@@ -518,45 +556,6 @@ void handle_message(twirc_state_t *s, twirc_event_t *evt)
 		}
 
 	}
-
-	/*
-	if (strcmp(evt->command, "PRIVMSG") == 0)
-	{
-		fprintf(stdout, "%s%s%*s%s: %.*s\n",
-				timestamp,
-				col_prefix,
-				meta->align * -26, // 25 = max nick length on Twitch, +1 for 'badge' 
-				nick,
-				col_suffix,
-				width,
-				evt->message);
-
-		// TODO this is working quite nicely, but it has one issue: words will
-		//      be ripped apart. instead, we should implement some logic that
-		//      makes sure that the message will only be split on spaces.
-
-		int offset = width;
-		while (offset < msg_len)
-		{
-			fprintf(stdout, "%*s%.*s\n", prefix_len, " ", width, evt->message + offset);
-			offset += width;
-		}
-		return;
-	}
-
-	if (strcmp(evt->command, "ACTION") == 0)
-	{
-		fprintf(stdout, "%s%s%*s %s%s%s\n",
-				timestamp,
-				col_prefix,
-				meta->align* -26, 
-				nick,
-				meta->align ? " " : "", 
-				evt->message,
-				col_suffix);
-		return;
-	}
-	*/
 }
 
 /*
@@ -582,19 +581,19 @@ void sigint_handler(int sig)
 	handled = sig;
 }
 
+/**
+ * Handles a window size change signal.
+ */
 void sigwin_handler(int sig)
 {
-
-	// https://www.unix.com/programming/136867-curses-not-updating-lines-cols.html
-	// http://www.delorie.com/djgpp/doc/libc/libc_495.html
-	struct winsize sz;
-	ioctl(0, TIOCGWINSZ, &sz);
-	fprintf(stderr, "Screen width: %i  Screen height: %i\n", sz.ws_col, sz.ws_row);
-
+	resized = 1;
 	handled = sig;
 }
 
 
+/**
+ * Prints the program's name and version number.
+ */
 void version()
 {
 	fprintf(stdout, "%s version %d.%d.%d - %s\n",
@@ -605,6 +604,9 @@ void version()
 				PROJECT_URL);
 }
 
+/**
+ * Prints usage information.
+ */
 void help(char *invocation)
 {
 	fprintf(stdout, "Usage:\n");
@@ -651,9 +653,17 @@ int detect_color_mode()
 	{
 		return COLOR_MODE_NONE;
 	}
-	if (term && strstr(term, "-256"))
+	if (term && strstr(term, "-8c"))
+	{
+		return COLOR_MODE_2BIT;
+	}
+	if (term && strstr(term, "-16c"))
 	{
 		return COLOR_MODE_4BIT;
+	}
+	if (term && strstr(term, "-256"))
+	{
+		return COLOR_MODE_8BIT;
 	}
 
 	// Check COLORTERM env var for 'truecolor' or '24bit'
@@ -762,6 +772,9 @@ int main(int argc, char **argv)
 	{
 		fprintf(stderr, "*** Initializing\n");
 	}
+
+	// Get the terminal size
+	termsize(&(m.term_width), &(m.term_height));
 	
 	// Make sure we still do clean-up on SIGINT (ctrl+c)
 	// and similar signals that indicate we should quit.
@@ -774,17 +787,6 @@ int main(int argc, char **argv)
 	sigaction(SIGQUIT, &sa_int, NULL);
 	sigaction(SIGTERM, &sa_int, NULL);
 
-
-	// Register a handler for when the terminal window size changed
-	// TODO issue with libtwirc: registering a handler for SIGWINCH,
-	// which is usually ignored by default, will lead to epoll_wait()
-	// to return an error once the signal is caught; this leads to the
-	// main loop to end and therefore to lurp shutting down, even though
-	// the connection to the server wasn't lost at all. We could either
-	// work around the problem here, by using a way more complicated main
-	// loop logic, or we attempt to fix the problem in libtwirc by setting
-	// the sigmask just before the call to epoll_wait, then resetting it
-	// right after... or maybe there are other, even better solutions?
 	struct sigaction sa_win = {
 		.sa_handler = &sigwin_handler
 	};
@@ -832,7 +834,13 @@ int main(int argc, char **argv)
 	running = 1;
 	while (twirc_tick(s, 1000) == 0 && running == 1)
 	{
-		// Nothing to do here - it's all done via the event handlers
+		// If we caught a window resize signal, fetch the new size
+		if (resized)
+		{
+			termsize(&(m.term_width), &(m.term_height));
+			fprintf(stderr, "Term size changed: %zu x %zu\n", m.term_width, m.term_height);
+			resized = 0;
+		}
 	}
 
 	if (twirc_get_last_error(s) < 0)
