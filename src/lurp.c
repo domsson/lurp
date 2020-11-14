@@ -12,7 +12,7 @@
 #include "libtwirc.h"
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 3
+#define VERSION_MINOR 4
 #define VERSION_PATCH 0
 
 #define PROJECT_NAME "lurp"
@@ -54,7 +54,6 @@ typedef struct options
 	uint8_t colormode;        // Color mode
 	uint8_t align: 1;         // Align/pad nicks and messages
 	uint8_t badges : 1;       // Print sub/mod 'badges'
-	uint8_t verbose : 1;      // Print additional info
 	uint8_t twitchtime : 1;   // Use the Twitch provided timestamp
 	uint8_t displaynames : 1; // Favor display over user names
 	uint8_t help : 1;
@@ -96,7 +95,7 @@ parse_args(int argc, char **argv, options_s *opts)
 {
 	opterr = 0;
 	int o;
-	while ((o = getopt(argc, argv, "abc:dhm:rst:V")) != -1)
+	while ((o = getopt(argc, argv, "abc:dhm:rt:V")) != -1)
 	{
 		switch(o)
 		{
@@ -119,9 +118,6 @@ parse_args(int argc, char **argv, options_s *opts)
 				break;
 			case 'r':
 				opts->twitchtime = 1;
-				break;
-			case 's':
-				opts->verbose = 1;
 				break;
 			case 't':
 				opts->timestamp = optarg;
@@ -305,12 +301,7 @@ random_color(rgb_s *rgb)
 static void
 handle_connect(twirc_state_t *s, twirc_event_t *evt)
 {
-	options_s *opts = twirc_get_context(s);
-
-	if (opts->verbose)
-	{
-		fprintf(stderr, "*** Connected\n");
-	}
+	fputs("*** Connected\n", stdout);
 }
 
 /*
@@ -320,10 +311,7 @@ static void
 handle_welcome(twirc_state_t *s, twirc_event_t *evt)
 {
 	options_s *opts = twirc_get_context(s);
-	if (opts->verbose)
-	{
-		fprintf(stderr, "*** Authenticated\n");
-	}
+	fputs("*** Authenticated\n", stdout);
 
 	// Let's join the specified channel
 	twirc_cmd_join(s, opts->chan);
@@ -351,11 +339,7 @@ handle_join(twirc_state_t *s, twirc_event_t *evt)
 		return;
 	}
 
-	options_s *opts = twirc_get_context(s);
-	if (opts->verbose)
-	{
-		fprintf(stderr, "*** Joined %s\n", evt->channel);
-	}
+	fprintf(stdout, "*** Joined %s\n", evt->channel);
 }
 
 static char*
@@ -653,11 +637,7 @@ handle_message(twirc_state_t *s, twirc_event_t *evt)
 static void
 handle_disconnect(twirc_state_t *s, twirc_event_t *evt)
 {
-	options_s *opts = twirc_get_context(s);
-	if (opts->verbose)
-	{
-		fprintf(stderr, "*** Disconnected\n");
-	}
+	fputs("*** Disconnected\n", stdout);
 	running = 0;
 }
 
@@ -809,11 +789,6 @@ main(int argc, char **argv)
 	// Set stdout to line buffered
 	setlinebuf(stdout);
 
-	if (opts.verbose)
-	{
-		fprintf(stderr, "*** Initializing\n");
-	}
-	
 	// Make sure we still do clean-up on SIGINT (ctrl+c)
 	// and similar signals that indicate we should quit.
 	struct sigaction sa = { .sa_handler = &on_signal };
@@ -854,6 +829,9 @@ main(int argc, char **argv)
 	cbs->action          = handle_message;
 	cbs->privmsg         = handle_message;
 	cbs->disconnect      = handle_disconnect;
+
+	term_setup();
+	fputs("*** Connecting ...\n", stdout);
 	
 	// Connect to the IRC server
 	if (twirc_connect_anon(s, DEFAULT_HOST, DEFAULT_PORT) != 0)
@@ -861,8 +839,6 @@ main(int argc, char **argv)
 		fprintf(stderr, "Error connecting, exiting\n");
 		return EXIT_FAILURE;
 	}
-
-	term_setup();
 
 	// Main loop - we call twirc_tick() every go-around, as that's what 
 	// makes the magic happen. The 1000 is a timeout in milliseconds that
@@ -882,19 +858,11 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (opts.verbose && twirc_get_last_error(s) < 0)
-	{
-		fprintf(stderr, "*** Last error: %d\n", twirc_get_last_error(s));
-	}
+	fprintf(stdout, "*** Quit (%d)\n", twirc_get_last_error(s));
 
-	// twirc_kill() is a convenience function that calls two functions:
-	// - twirc_disconnect(), which makes sure the connection was closed
-	// - twirc_free(), which frees the libtwirc state, so we don't leak
-	twirc_kill(s);
+	twirc_kill(s); // disconnect and free the twirc state
+	term_reset();  // put the terminal back in normal operation
 
-	term_reset();
-
-	// That's all, wave good-bye!
 	return EXIT_SUCCESS;
 }
 
