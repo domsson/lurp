@@ -11,8 +11,8 @@
 #include "libtwirc.h"
 
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 1
-#define VERSION_BUILD 0
+#define VERSION_MINOR 2
+#define VERSION_PATCH 0
 
 #define PROJECT_NAME "lurp"
 #define PROJECT_URL "https://github.com/domsson/lurp"
@@ -574,12 +574,12 @@ void sigwin_handler(int sig)
  */
 void version()
 {
-	fprintf(stdout, "%s version %d.%d.%d - %s\n",
-				PROJECT_NAME,
-				VERSION_MAJOR,
-				VERSION_MINOR,
-				VERSION_BUILD,
-				PROJECT_URL);
+	fprintf(stdout, "%s %d.%d.%d\n%s\n",
+			PROJECT_NAME,
+			VERSION_MAJOR,
+		       	VERSION_MINOR,
+			VERSION_PATCH,
+			PROJECT_URL);
 }
 
 /**
@@ -702,7 +702,7 @@ int main(int argc, char **argv)
 	// Process command line options
 	opterr = 0;
 	int o;
-	while ((o = getopt(argc, argv, "abc:dhm:rst:v")) != -1)
+	while ((o = getopt(argc, argv, "abc:dhm:rst:V")) != -1)
 	{
 		switch(o)
 		{
@@ -733,7 +733,7 @@ int main(int argc, char **argv)
 			case 't':
 				m.timestamp = optarg;
 				break;
-			case 'v':
+			case 'V':
 				version();
 				return EXIT_SUCCESS;
 		}
