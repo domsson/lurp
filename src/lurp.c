@@ -518,7 +518,7 @@ print_msg_body(char *msg, int cmode, char const *hex, size_t tw, int pad)
 			// ...we just print it and fuck up alignment
 			// TODO obviously, we should instead just split
 			// the word up, print the remainder on the next line
-			fprintf(stdout, "%s", tok);
+			fputs(tok, stdout);
 			w++;
 		}
 
@@ -535,7 +535,7 @@ print_msg_body(char *msg, int cmode, char const *hex, size_t tw, int pad)
 		else
 		{
 			// ...so we need a line break and padding
-			fprintf(stdout, "\n");
+			fputc('\n', stdout);
 			// And now reset the available width size
 			width_left = width;
 			fprintf(stdout, "%*s%s", pad, "", tok);
@@ -802,7 +802,7 @@ main(int argc, char **argv)
 	// Get the terminal size
 	if (term_size(&(opts.term_width), &(opts.term_height)) == -1)
 	{
-		fprintf(stderr, "Could not determine terminal size\n");
+		fputs("Could not determine terminal size\n", stderr);
 		return EXIT_FAILURE;
 	}
 	
@@ -812,7 +812,7 @@ main(int argc, char **argv)
 
 	if (s == NULL)
 	{
-		fprintf(stderr, "Error initializing libtwirc\n");
+		fputs("Error initializing libtwirc\n", stderr);
 		return EXIT_FAILURE;
 	}
 	
@@ -836,7 +836,7 @@ main(int argc, char **argv)
 	// Connect to the IRC server
 	if (twirc_connect_anon(s, DEFAULT_HOST, DEFAULT_PORT) != 0)
 	{
-		fprintf(stderr, "Error connecting, exiting\n");
+		fputs("*** Connection failed!\n", stdout);
 		return EXIT_FAILURE;
 	}
 
