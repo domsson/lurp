@@ -1,1 +1,3 @@
-gcc -g -Wall src/lurp.c -o bin/lurp -ltwirc 
+#!/usr/bin/env bash
+#gcc -Wall -O3 -o ./bin/lurp ./src/lurp.c -ltwirc 
+gcc -Wall -g -o ./bin/lurp ./src/lurp.c -ltwirc 

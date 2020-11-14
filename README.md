@@ -59,7 +59,7 @@ supports and tries to make use of that. However, you can override this
 by explicitly specifying the color mode yourself. The following options 
 are available:
 
-- `none`: monochrome, no colors
+- `mono`: monochrome, no colors
 - `2bit`: 8 colors
 - `4bit`: 16 colors
 - `8bit`: 256 colors
