@@ -47,6 +47,14 @@
 static volatile int running; // stop main loop in case of SIGINT etc
 static volatile int resized; // signal that the terminal size changed 
 
+typedef struct rgb_color 
+{
+	unsigned r;
+	unsigned g;
+	unsigned b;
+}
+rgb_s;
+
 typedef struct options
 {
 	char *chan;               // Channel to join
@@ -88,7 +96,6 @@ color_mode(const char *mode, int fallback)
 	}
 	return fallback;
 }
-
 
 static void
 parse_args(int argc, char **argv, options_s *opts)
@@ -158,14 +165,6 @@ const char *twitch_colors[] = {
 	"#FF69B4", // 95: HotPink
 };
 */
-
-typedef struct rgb_color 
-{
-	unsigned r;
-	unsigned g;
-	unsigned b;
-}
-rgb_s;
 
 /*
  * Returns 0 if str is NULL or empty, otherwise 1.
@@ -806,7 +805,6 @@ main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	
-
 	// Create libtwirc state instance
 	twirc_state_t *s = twirc_init();
 
